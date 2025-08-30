@@ -307,19 +307,8 @@ CSTL 库提供了内存池功能，可以显著提高内存分配和释放的性
 3. 正常使用容器
 4. 销毁对象池：`obj_pool_destroy()`
 
-## 许可证
 
-CSTL 库采用 MIT 许可证。详情请参阅 LICENSE 文件。
 
-## 贡献
-
-欢迎贡献代码！请遵循以下步骤：
-
-1. Fork 本仓库
-2. 创建您的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交您的更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开一个 Pull Request
 
 ## 版本历史
 
@@ -332,9 +321,6 @@ CSTL 库采用 MIT 许可证。详情请参阅 LICENSE 文件。
 
 如有任何问题或建议，请通过以下方式联系：
 
-- 邮箱：[your-email@example.com]
-- 项目主页：[https://github.com/yourusername/cstl]
+- 邮箱：[1340130745@qq.com]
+- 项目主页：[https://github.com/wangzhongyi0/cstl/tree/master]
 
-## 致谢
-
-感谢所有为这个项目做出贡献的开发者！
