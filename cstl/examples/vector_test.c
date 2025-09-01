@@ -16,11 +16,8 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>      // 用于 time()
+#include "data_type.h"
 
-typedef struct{
-    vector_t* data;
-    int time;
-}audio_pcm;
 
 // 创建数据结构保存音频数据
 static vector_t* audio_data = NULL;
