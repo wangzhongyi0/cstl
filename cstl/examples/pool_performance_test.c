@@ -216,8 +216,17 @@ double test_vector_standard_allocation(size_t object_size, size_t count)
     
     /* 添加元素 */
     for (size_t i = 0; i < count; i++) {
-        int value = (int)i;  /* 使用int作为示例，实际大小由object_size决定 */
-        if (vector_push_back(vector, &value) != CSTL_OK) {
+        /* 创建适当大小的测试数据 */
+        char test_data[object_size];
+        memset(test_data, 0, object_size);
+        /* 存储索引值，确保数据大小匹配 */
+        if (object_size >= sizeof(size_t)) {
+            *(size_t*)test_data = i;
+        } else if (object_size >= sizeof(int)) {
+            *(int*)test_data = (int)i;
+        }
+        
+        if (vector_push_back(vector, test_data) != CSTL_OK) {
             perror("Failed to push element to vector");
             exit(EXIT_FAILURE);
         }
@@ -246,8 +255,12 @@ double test_vector_standard_allocation(size_t object_size, size_t count)
  */
 double test_vector_memory_pool_allocation(size_t object_size, size_t count)
 {
-    /* 创建内存池 */
-    mem_pool_t* pool = mem_pool_create(object_size, count * 2, NULL);  /* 分配更多空间以适应向量增长 */
+    /* 创建内存池 - 块大小要足够容纳vector的连续内存需求 */
+    /* 估算vector最终容量，预留足够空间 */
+    size_t estimated_capacity = count * 2;  /* 考虑vector的增长策略 */
+    size_t pool_block_size = object_size * estimated_capacity;
+    
+    mem_pool_t* pool = mem_pool_create(pool_block_size, 4, NULL);  /* 分配4个大块 */
     if (pool == NULL) {
         perror("Failed to create memory pool");
         exit(EXIT_FAILURE);
@@ -267,8 +280,17 @@ double test_vector_memory_pool_allocation(size_t object_size, size_t count)
     
     /* 添加元素 */
     for (size_t i = 0; i < count; i++) {
-        int value = (int)i;  /* 使用int作为示例，实际大小由object_size决定 */
-        if (vector_push_back(vector, &value) != CSTL_OK) {
+        /* 创建适当大小的测试数据 */
+        char test_data[object_size];
+        memset(test_data, 0, object_size);
+        /* 存储索引值，确保数据大小匹配 */
+        if (object_size >= sizeof(size_t)) {
+            *(size_t*)test_data = i;
+        } else if (object_size >= sizeof(int)) {
+            *(int*)test_data = (int)i;
+        }
+        
+        if (vector_push_back(vector, test_data) != CSTL_OK) {
             perror("Failed to push element to vector");
             exit(EXIT_FAILURE);
         }
@@ -313,8 +335,17 @@ double test_list_standard_allocation(size_t object_size, size_t count)
     
     /* 添加元素 */
     for (size_t i = 0; i < count; i++) {
-        int value = (int)i;  /* 使用int作为示例，实际大小由object_size决定 */
-        if (list_push_back(list, &value) != CSTL_OK) {
+        /* 创建适当大小的测试数据 */
+        char test_data[object_size];
+        memset(test_data, 0, object_size);
+        /* 存储索引值，确保数据大小匹配 */
+        if (object_size >= sizeof(size_t)) {
+            *(size_t*)test_data = i;
+        } else if (object_size >= sizeof(int)) {
+            *(int*)test_data = (int)i;
+        }
+        
+        if (list_push_back(list, test_data) != CSTL_OK) {
             perror("Failed to push element to list");
             exit(EXIT_FAILURE);
         }
@@ -343,8 +374,8 @@ double test_list_standard_allocation(size_t object_size, size_t count)
  */
 double test_list_object_pool_allocation(size_t object_size, size_t count)
 {
-    /* 创建节点对象池 */
-    obj_pool_t* pool = obj_pool_create(sizeof(list_node_t) + object_size, count * 2, count * 2, NULL, NULL);
+    /* 创建节点对象池 - list_node_t只包含指针，不包含数据 */
+    obj_pool_t* pool = obj_pool_create(sizeof(list_node_t), count * 2, count * 2, NULL, NULL);
     if (pool == NULL) {
         perror("Failed to create object pool");
         exit(EXIT_FAILURE);
@@ -364,8 +395,17 @@ double test_list_object_pool_allocation(size_t object_size, size_t count)
     
     /* 添加元素 */
     for (size_t i = 0; i < count; i++) {
-        int value = (int)i;  /* 使用int作为示例，实际大小由object_size决定 */
-        if (list_push_back(list, &value) != CSTL_OK) {
+        /* 创建适当大小的测试数据 */
+        char test_data[object_size];
+        memset(test_data, 0, object_size);
+        /* 存储索引值，确保数据大小匹配 */
+        if (object_size >= sizeof(size_t)) {
+            *(size_t*)test_data = i;
+        } else if (object_size >= sizeof(int)) {
+            *(int*)test_data = (int)i;
+        }
+        
+        if (list_push_back(list, test_data) != CSTL_OK) {
             perror("Failed to push element to list");
             exit(EXIT_FAILURE);
         }

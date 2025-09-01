@@ -10,6 +10,9 @@ CSTL 是一个用 C 语言实现的标准模板库，提供了类似于 C++ STL 
 - **线程安全支持**：可选的线程安全功能，支持多线程环境
 - **内存池优化**：内置内存池和对象池，提高内存分配性能
 - **跨平台支持**：支持 Windows、Linux 和 macOS 等多种平台
+- **音频数据处理**：专门针对音频数据处理的示例和测试
+- **多种排序算法**：支持快速排序、归并排序、堆排序、插入排序等
+- **性能测试**：提供全面的性能测试和基准测试工具
 
 ## 目录结构
 
@@ -34,9 +37,15 @@ cstl/
 │   ├── queue.c       # 队列适配器实现
 │   └── algo.c        # 算法模块实现
 ├── examples/         # 示例程序
+│   ├── common/       # 通用工具和数据类型
+│   │   ├── data_type.h    # 数据类型定义
+│   │   ├── utils.c        # 工具函数
+│   │   └── utils.h        # 工具函数头文件
 │   ├── basic_test.c          # 基本功能测试示例
 │   ├── thread_safe_test.c    # 线程安全测试示例
-│   └── pool_performance_test.c # 内存池和对象池性能测试示例
+│   ├── pool_performance_test.c # 内存池和对象池性能测试示例
+│   ├── vector_test.c         # 向量容器测试
+│   └── queue_test.c          # 队列容器和音频数据处理测试
 └── tests/            # 测试文件
 ```
 
@@ -76,6 +85,8 @@ make
 make test              # 运行基本功能测试
 make test_thread_safe  # 运行线程安全测试
 make test_pool_performance # 运行内存池和对象池性能测试
+make test_queue        # 运行队列和音频数据处理测试
+make test_vector       # 运行向量容器测试
 make test_all          # 运行所有测试
 ```
 
@@ -307,15 +318,383 @@ CSTL 库提供了内存池功能，可以显著提高内存分配和释放的性
 3. 正常使用容器
 4. 销毁对象池：`obj_pool_destroy()`
 
+## 实际应用示例
+
+### 音频数据处理
+
+CSTL 库专门提供了音频数据处理的示例，展示如何在音频处理场景中使用容器和算法：
+
+```c
+#include "cstl.h"
+#include "data_type.h"
+
+// 创建音频数据队列
+queue_t* audio_queue = queue_create(sizeof(stl_audio_pcm), NULL, NULL);
+
+// 处理音频数据
+void process_audio_data() {
+    // 生成音频PCM数据
+    stl_audio_pcm pcm;
+    pcm.data = vector_create(sizeof(int16_t), 1024, NULL);
+    pcm.time = time(NULL);
+    
+    // 添加随机音频采样
+    for(int i = 0; i < 1024; i++) {
+        int16_t sample = random_int64(0, 16000);
+        vector_push_back(pcm.data, &sample);
+    }
+    
+    // 使用快速排序对音频数据进行排序
+    iterator_t* begin = vector_begin(pcm.data);
+    iterator_t* end = vector_end(pcm.data);
+    algo_sort(begin, end, compare_a_b, SORT_QUICK);
+    
+    // 将处理后的数据加入队列
+    queue_push(audio_queue, &pcm);
+    
+    // 清理迭代器
+    iterator_destroy(begin);
+    iterator_destroy(end);
+}
+```
+
+### 多种排序算法测试
+
+库提供了完整的排序算法实现和测试：
+
+- **快速排序**：适用于大多数场景的通用排序算法
+- **归并排序**：稳定排序，适合大数据集
+- **堆排序**：原地排序，内存效率高
+- **插入排序**：适合小数据集或基本有序的数据
+
+详细示例请参考 `examples/queue_test.c` 文件。
 
 
+
+
+## 内存管理
+
+### 基础内存管理机制
+
+CSTL库提供了完善的内存管理机制，包括：
+
+1. **析构函数支持**：每个容器都支持自定义析构函数，用于释放元素的动态内存
+2. **分配器接口**：支持自定义内存分配器，默认使用标准malloc/free
+3. **内存池优化**：提供内存池和对象池，提高频繁分配/释放的性能
+4. **线程安全**：支持多线程环境下的安全内存操作
+
+### 析构函数机制
+
+#### 析构函数类型定义
+```c
+typedef void (*destructor_fn_t)(void* data);
+```
+
+#### 析构函数调用时机
+- `vector_clear()` - 清空容器时调用每个元素的析构函数
+- `vector_destroy()` - 销毁容器时调用每个元素的析构函数
+- `list_clear()` - 清空链表时调用每个节点的析构函数
+- `list_destroy()` - 销毁链表时调用每个节点的析构函数
+- `vector_erase()` - 删除元素时调用该元素的析构函数
+- `list_erase()` - 删除节点时调用该节点的析构函数
+
+### 复杂数据结构的内存管理
+
+#### 1. 结构体包含动态分配内存
+
+当容器存储的结构体包含动态分配的内存指针时，**必须**提供自定义析构函数：
+
+```c
+typedef struct {
+    char* name;        // 动态分配的字符串
+    int* scores;       // 动态分配的数组
+    size_t score_count;
+} student_t;
+
+// 自定义析构函数
+void student_destructor(void* data) {
+    student_t* student = (student_t*)data;
+    if (student->name) {
+        free(student->name);
+    }
+    if (student->scores) {
+        free(student->scores);
+    }
+}
+
+// 创建容器时提供析构函数
+vector_t* students = vector_create(sizeof(student_t), 0, NULL, student_destructor);
+```
+
+#### 2. 结构体包含其他容器
+
+当结构体包含其他容器指针时，**必须**提供析构函数来释放嵌套容器：
+
+```c
+typedef struct {
+    vector_t* data;    // 嵌套的向量容器
+    time_t timestamp;
+} audio_frame_t;
+
+// 嵌套容器的析构函数
+void audio_frame_destructor(void* data) {
+    audio_frame_t* frame = (audio_frame_t*)data;
+    if (frame->data) {
+        vector_destroy(frame->data);  // 销毁嵌套的向量
+    }
+}
+
+// 创建容器时提供析构函数
+queue_t* audio_queue = queue_create(sizeof(audio_frame_t), NULL, audio_frame_destructor);
+```
+
+#### 3. 多层嵌套容器
+
+对于多层嵌套的复杂结构，需要递归释放：
+
+```c
+typedef struct {
+    list_t* sub_items;    // 嵌套的链表
+    vector_t* tags;       // 嵌套的向量
+    char* description;    // 动态字符串
+} complex_item_t;
+
+// 多层嵌套的析构函数
+void complex_item_destructor(void* data) {
+    complex_item_t* item = (complex_item_t*)data;
+    if (item->sub_items) {
+        list_destroy(item->sub_items);    // 释放嵌套链表
+    }
+    if (item->tags) {
+        vector_destroy(item->tags);       // 释放嵌套向量
+    }
+    if (item->description) {
+        free(item->description);          // 释放动态字符串
+    }
+}
+```
+
+### 内存管理最佳实践
+
+#### 1. 总是提供析构函数
+
+当元素类型包含以下内容时，必须提供析构函数：
+- 动态分配的内存指针（malloc/calloc/realloc）
+- 其他容器指针
+- 文件描述符或系统资源
+- 需要特殊清理的资源
+
+#### 2. 析构函数设计原则
+
+```c
+// 正确的析构函数设计
+void safe_destructor(void* data) {
+    if (data == NULL) return;  // 空指针检查
+    
+    my_type_t* obj = (my_type_t*)data;
+    
+    // 1. 检查指针是否为NULL再释放
+    if (obj->ptr1) {
+        free(obj->ptr1);
+        obj->ptr1 = NULL;  // 避免悬空指针
+    }
+    
+    // 2. 释放嵌套容器
+    if (obj->nested_container) {
+        container_destroy(obj->nested_container);
+        obj->nested_container = NULL;
+    }
+    
+    // 3. 关闭文件描述符
+    if (obj->file_handle != -1) {
+        close(obj->file_handle);
+        obj->file_handle = -1;
+    }
+}
+```
+
+#### 3. 避免内存泄漏的常见场景
+
+**场景1：队列中的音频数据帧**
+```c
+// 错误示例：会导致内存泄漏
+queue_t* queue = queue_create(sizeof(audio_frame_t), NULL, NULL);
+
+// 正确示例：提供析构函数
+queue_t* queue = queue_create(sizeof(audio_frame_t), NULL, audio_frame_destructor);
+```
+
+**场景2：向量中的结构体数组**
+```c
+// 错误示例：结构体中的动态内存不会被释放
+vector_t* vec = vector_createsizeof(my_struct_t), 0, NULL, NULL);
+
+// 正确示例：提供完整的析构函数
+vector_t* vec = vector_create(sizeof(my_struct_t), 0, NULL, my_struct_destructor);
+```
+
+#### 4. 线程安全考虑
+
+```c
+// 线程安全的析构函数
+void thread_safe_destructor(void* data) {
+    my_type_t* obj = (my_type_t*)data;
+    
+    // 使用原子操作或锁来保护共享资源
+    if (obj->shared_resource) {
+        pthread_mutex_lock(&obj->mutex);
+        release_shared_resource(obj->shared_resource);
+        pthread_mutex_unlock(&obj->mutex);
+    }
+}
+```
+
+### 内存池与对象池
+
+#### 内存池使用
+
+```c
+// 创建内存池
+mem_pool_t* pool = mem_pool_create(sizeof(int), 1000, NULL);
+
+// 创建容器并设置内存池
+vector_t* vec = vector_create(sizeof(int), 0, NULL, NULL);
+vector_set_memory_pool(vec, pool);
+
+// 使用容器...
+vector_destroy(vec);
+mem_pool_destroy(pool);
+```
+
+#### 对象池使用
+
+```c
+// 创建对象池
+obj_pool_t* pool = obj_pool_create(sizeof(list_node_t), 100, 50, NULL, NULL);
+
+// 创建链表并设置节点池
+list_t* list = list_create(sizeof(my_data_t), NULL, my_data_destructor);
+list_set_node_pool(list, pool);
+
+// 使用链表...
+list_destroy(list);
+obj_pool_destroy(pool);
+```
+
+### 内存管理调试
+
+#### 1. 内存泄漏检测
+
+```c
+// 在开发阶段可以使用调试版本的分配器
+#ifdef DEBUG
+    allocator_t* debug_allocator = create_debug_allocator();
+    vector_t* vec = vector_create(sizeof(my_type_t), 0, debug_allocator, my_type_destructor);
+#else
+    vector_t* vec = vector_create(sizeof(my_type_t), 0, NULL, my_type_destructor);
+#endif
+```
+
+#### 2. 内存使用统计
+
+```c
+// 获取内存池统计信息
+size_t allocated, free;
+mem_pool_get_stats(pool, &allocated, &free);
+printf("内存池使用情况: 已分配=%zu, 空闲=%zu\n", allocated, free);
+```
+
+### 常见错误及解决方案
+
+#### 1. 忘记提供析构函数
+
+**问题**：容器中的结构体包含动态内存，但没有提供析构函数
+**解决**：始终为包含动态内存的结构体提供析构函数
+
+#### 2. 析构函数中的重复释放
+
+**问题**：析构函数试图释放已经释放的内存
+**解决**：在析构函数中检查指针是否为NULL，释放后置为NULL
+
+#### 3. 循环引用
+
+**问题**：两个结构体相互引用，导致无法正确释放
+**解决**：使用弱引用或手动管理引用计数
+
+#### 4. 线程竞争
+
+**问题**：多线程环境下析构函数被同时调用
+**解决**：使用适当的同步机制保护析构函数
+
+### 性能优化建议
+
+1. **对于小型简单类型**：可以不提供析构函数，减少函数调用开销
+2. **对于大型复杂结构**：提供完整的析构函数，避免内存泄漏
+3. **使用内存池**：对于频繁分配/释放的场景，使用内存池提高性能
+4. **批量操作**：尽量使用批量操作而不是逐个元素操作
+
+### 示例：完整的内存管理
+
+```c
+#include "cstl.h"
+
+// 定义复杂数据结构
+typedef struct {
+    char* name;
+    vector_t* scores;
+    list_t* friends;
+    time_t created_at;
+} user_profile_t;
+
+// 用户资料的析构函数
+void user_profile_destructor(void* data) {
+    user_profile_t* profile = (user_profile_t*)data;
+    
+    // 释放动态分配的字符串
+    if (profile->name) {
+        free(profile->name);
+        profile->name = NULL;
+    }
+    
+    // 释放嵌套的向量容器
+    if (profile->scores) {
+        vector_destroy(profile->scores);
+        profile->scores = NULL;
+    }
+    
+    // 释放嵌套的链表容器
+    if (profile->friends) {
+        list_destroy(profile->friends);
+        profile->friends = NULL;
+    }
+}
+
+int main() {
+    // 创建用户资料向量，提供完整的析构函数
+    vector_t* users = vector_create(sizeof(user_profile_t), 0, NULL, user_profile_destructor);
+    
+    // 启用线程安全（如果需要）
+    vector_enable_thread_safety(users);
+    
+    // 使用用户资料...
+    
+    // 销毁向量，所有嵌套资源会被自动释放
+    vector_destroy(users);
+    
+    return 0;
+}
+```
 
 ## 版本历史
 
-- 1.0.0
+- 1.0.0 (2025-09-01)
   - 初始版本
   - 实现基本的容器和算法
   - 支持线程安全和内存池优化
+  - 新增音频数据处理示例和队列测试
+  - 完善多种排序算法实现和性能测试
+  - 添加跨平台构建支持（CMake和Makefile）
+  - 提供完整的示例程序和测试用例
 
 ## 联系方式
 

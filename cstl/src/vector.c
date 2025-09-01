@@ -216,17 +216,29 @@ static error_code_t vector_ensure_capacity(vector_t* vector, size_t min_capacity
     /* 重新分配内存 */
     void* new_data;
     if (vector->mem_pool != NULL) {
-        /* 使用内存池分配 */
-        new_data = vector->allocator->allocate(vector->allocator, new_capacity * vector->element_size);
-        if (new_data == NULL) {
-            return CSTL_ERROR_OUT_OF_MEMORY;
+        /* 检查内存池块大小是否足够 */
+        size_t required_size = new_capacity * vector->element_size;
+        if (vector->mem_pool->block_size >= required_size) {
+            /* 使用内存池分配 */
+            new_data = mem_pool_alloc(vector->mem_pool);
+            if (new_data == NULL) {
+                return CSTL_ERROR_OUT_OF_MEMORY;
+            }
+            
+            /* 复制数据 */
+            memcpy(new_data, vector->data, vector->size * vector->element_size);
+            
+            /* 释放旧数据 */
+            if (vector->data != NULL) {
+                mem_pool_free(vector->mem_pool, vector->data);
+            }
+        } else {
+            /* 内存池块大小不够，使用普通分配器 */
+            new_data = vector->allocator->reallocate(vector->allocator, vector->data, required_size);
+            if (new_data == NULL) {
+                return CSTL_ERROR_OUT_OF_MEMORY;
+            }
         }
-        
-        /* 复制数据 */
-        memcpy(new_data, vector->data, vector->size * vector->element_size);
-        
-        /* 释放旧数据 */
-        vector->allocator->deallocate(vector->allocator, vector->data);
     } else {
         /* 直接重新分配 */
         new_data = vector->allocator->reallocate(vector->allocator, vector->data, new_capacity * vector->element_size);
@@ -317,9 +329,12 @@ error_code_t vector_init(vector_t* vector, size_t element_size, size_t initial_c
     }
     
     /* 分配数据数组 */
-    void* data = allocator->allocate(allocator, initial_capacity * element_size);
-    if (data == NULL && initial_capacity > 0) {
-        return CSTL_ERROR_OUT_OF_MEMORY;
+    void* data = NULL;
+    if (initial_capacity > 0) {
+        data = allocator->allocate(allocator, initial_capacity * element_size);
+        if (data == NULL) {
+            return CSTL_ERROR_OUT_OF_MEMORY;
+        }
     }
     
     /* 初始化向量 */
@@ -359,7 +374,11 @@ void vector_clear(vector_t* vector)
     
     /* 释放数据数组 */
     if (vector->data != NULL) {
-        vector->allocator->deallocate(vector->allocator, vector->data);
+        if (vector->mem_pool != NULL && vector->mem_pool->block_size >= vector->capacity * vector->element_size) {
+            mem_pool_free(vector->mem_pool, vector->data);
+        } else {
+            vector->allocator->deallocate(vector->allocator, vector->data);
+        }
         vector->data = NULL;
     }
     
