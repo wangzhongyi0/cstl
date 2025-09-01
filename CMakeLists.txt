@@ -16,6 +16,7 @@ set(SOURCES
     cstl/src/stack.c
     cstl/src/queue.c
     cstl/src/algo.c
+    "./cstl/examples/common/utils.c"
 )
 
 # 创建静态库
