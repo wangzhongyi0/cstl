@@ -38,6 +38,7 @@ void verify_after_sort(stl_audio_pcm* pcm, uint16_t index);
 
 
 int main(){
+    printf("haha\n");	
     long long start_time, end_time;
     start_time = get_current_time_ms_high_precision();
     printf("队列实验开始\n");
