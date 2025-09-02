@@ -12,6 +12,10 @@
 #include <assert.h>
 #include <time.h>
 
+/* 前向声明 */
+static error_code_t insert_sort_impl(iterator_t* begin, iterator_t* end, 
+                                    compare_fn_t compare, size_t element_size);
+
 /**
  * @brief 临时缓冲区结构体
  */
@@ -100,7 +104,86 @@ static void set_element_at_index(iterator_t* begin, size_t index, const void* va
 }
 
 /**
- * @brief 快速排序分区函数
+ * @brief 选择基准值（三数取中法）
+ * 
+ * @param begin 起始迭代器
+ * @param end 结束迭代器
+ * @param compare 比较函数指针
+ * @param element_size 元素大小
+ * @return void* 基准值指针，需要调用者释放
+ */
+static void* select_pivot_median_of_three(iterator_t* begin, iterator_t* end,
+                                        compare_fn_t compare, size_t element_size)
+{
+    /* 获取第一个、中间和最后一个元素 */
+    iterator_t* first = iterator_clone(begin);
+    iterator_t* last = iterator_clone(end);
+    iterator_prev(last);
+    
+    /* 计算中间位置 */
+    size_t size = 0;
+    iterator_t* temp = iterator_clone(begin);
+    while (iterator_valid(temp) && !iterator_equal(temp, end)) {
+        size++;
+        iterator_next(temp);
+    }
+    iterator_destroy(temp);
+    
+    iterator_t* mid = iterator_clone(begin);
+    for (size_t i = 0; i < size / 2; i++) {
+        iterator_next(mid);
+    }
+    
+    void* first_val = NULL;
+    void* mid_val = NULL;
+    void* last_val = NULL;
+    
+    iterator_get(first, &first_val);
+    iterator_get(mid, &mid_val);
+    iterator_get(last, &last_val);
+    
+    /* 三数取中法 */
+    void* pivot_value = malloc(element_size);
+    if (pivot_value == NULL) {
+        iterator_destroy(first);
+        iterator_destroy(last);
+        iterator_destroy(mid);
+        return NULL;
+    }
+    
+    if (compare(first_val, mid_val) <= 0) {
+        if (compare(mid_val, last_val) <= 0) {
+            /* first <= mid <= last */
+            memcpy(pivot_value, mid_val, element_size);
+        } else if (compare(first_val, last_val) <= 0) {
+            /* first <= last < mid */
+            memcpy(pivot_value, last_val, element_size);
+        } else {
+            /* last < first <= mid */
+            memcpy(pivot_value, first_val, element_size);
+        }
+    } else {
+        if (compare(first_val, last_val) <= 0) {
+            /* mid < first <= last */
+            memcpy(pivot_value, first_val, element_size);
+        } else if (compare(mid_val, last_val) <= 0) {
+            /* mid <= last < first */
+            memcpy(pivot_value, last_val, element_size);
+        } else {
+            /* last < mid < first */
+            memcpy(pivot_value, mid_val, element_size);
+        }
+    }
+    
+    iterator_destroy(first);
+    iterator_destroy(last);
+    iterator_destroy(mid);
+    
+    return pivot_value;
+}
+
+/**
+ * @brief 快速排序分区函数（优化版）
  * 
  * @param begin 起始迭代器
  * @param end 结束迭代器
@@ -130,18 +213,11 @@ static error_code_t quick_sort_partition(iterator_t* begin, iterator_t* end,
     /* 选择最后一个元素作为基准 */
     iterator_t* last = iterator_clone(end);
     iterator_prev(last);
-    void* pivot_value_ptr = NULL;
-    iterator_get(last, &pivot_value_ptr);
     
-    /* 复制基准值，避免指针失效问题 */
-    void* pivot_value = malloc(element_size);
-    if (pivot_value == NULL) {
-        iterator_destroy(last);
-        return CSTL_ERROR_OUT_OF_MEMORY;
-    }
-    memcpy(pivot_value, pivot_value_ptr, element_size);
+    void* pivot_value = NULL;
+    iterator_get(last, &pivot_value);
     
-    /* 初始化i为begin-1，使用简单的指针计数而不是迭代器操作 */
+    /* 初始化i为begin-1 */
     iterator_t* i = iterator_clone(begin);
     
     /* 遍历从begin到last的元素（不包括last） */
@@ -168,16 +244,14 @@ static error_code_t quick_sort_partition(iterator_t* begin, iterator_t* end,
         iterator_destroy(last);
         iterator_destroy(i);
         iterator_destroy(j);
-        free(pivot_value);
         return CSTL_ERROR_ITERATOR_END;
     }
     
     /* 交换i位置和基准位置的元素 */
     void* i_value = NULL;
     iterator_get(i, &i_value);
-    algo_swap(i_value, pivot_value_ptr, element_size);
-    
-    free(pivot_value);
+    iterator_get(last, &pivot_value);
+    algo_swap(i_value, pivot_value, element_size);
     
     *pivot = iterator_clone(i);
     
@@ -189,7 +263,7 @@ static error_code_t quick_sort_partition(iterator_t* begin, iterator_t* end,
 }
 
 /**
- * @brief 快速排序实现
+ * @brief 快速排序实现（优化版）
  * 
  * @param begin 起始迭代器
  * @param end 结束迭代器
@@ -215,8 +289,9 @@ static error_code_t quick_sort_impl(iterator_t* begin, iterator_t* end,
     
     iterator_destroy(temp);
     
-    if (size <= 1) {
-        return CSTL_OK;
+    /* 小数组使用插入排序优化 */
+    if (size <= 16) {
+        return insert_sort_impl(begin, end, compare, element_size);
     }
     
     iterator_t* pivot_iter = NULL;
@@ -277,19 +352,21 @@ static error_code_t quick_sort_impl(iterator_t* begin, iterator_t* end,
 }
 
 /**
- * @brief 归并排序合并函数
+ * @brief 归并排序合并函数（优化版）
  * 
  * @param begin 起始迭代器
  * @param mid 中间迭代器
  * @param end 结束迭代器
  * @param compare 比较函数指针
  * @param element_size 元素大小
+ * @param merge_buffer 预分配的合并缓冲区
  * @return error_code_t 错误码
  */
 static error_code_t merge_sort_merge(iterator_t* begin, iterator_t* mid, iterator_t* end, 
-                                     compare_fn_t compare, size_t element_size)
+                                     compare_fn_t compare, size_t element_size,
+                                     void* merge_buffer)
 {
-    /* 创建临时缓冲区 */
+    /* 计算左右部分大小 */
     size_t left_size = 0;
     size_t right_size = 0;
     
@@ -307,16 +384,9 @@ static error_code_t merge_sort_merge(iterator_t* begin, iterator_t* mid, iterato
     }
     iterator_destroy(temp);
     
-    temp_buffer_t* left_buffer = temp_buffer_create(left_size, element_size);
-    if (left_buffer == NULL) {
-        return CSTL_ERROR_OUT_OF_MEMORY;
-    }
-    
-    temp_buffer_t* right_buffer = temp_buffer_create(right_size, element_size);
-    if (right_buffer == NULL) {
-        temp_buffer_destroy(left_buffer);
-        return CSTL_ERROR_OUT_OF_MEMORY;
-    }
+    /* 使用预分配的缓冲区 */
+    char* left_buffer = (char*)merge_buffer;
+    char* right_buffer = (char*)merge_buffer + left_size * element_size;
     
     /* 复制数据到临时缓冲区 */
     size_t i = 0;
@@ -324,7 +394,7 @@ static error_code_t merge_sort_merge(iterator_t* begin, iterator_t* mid, iterato
     while (iterator_valid(iter) && !iterator_equal(iter, mid)) {
         void* element = NULL;
         iterator_get(iter, &element);
-        memcpy((char*)left_buffer->data + i * element_size, element, element_size);
+        memcpy(left_buffer + i * element_size, element, element_size);
         i++;
         iterator_next(iter);
     }
@@ -335,7 +405,7 @@ static error_code_t merge_sort_merge(iterator_t* begin, iterator_t* mid, iterato
     while (iterator_valid(iter) && !iterator_equal(iter, end)) {
         void* element = NULL;
         iterator_get(iter, &element);
-        memcpy((char*)right_buffer->data + i * element_size, element, element_size);
+        memcpy(right_buffer + i * element_size, element, element_size);
         i++;
         iterator_next(iter);
     }
@@ -347,8 +417,8 @@ static error_code_t merge_sort_merge(iterator_t* begin, iterator_t* mid, iterato
     iter = iterator_clone(begin);
     
     while (left_index < left_size && right_index < right_size) {
-        void* left_element = (char*)left_buffer->data + left_index * element_size;
-        void* right_element = (char*)right_buffer->data + right_index * element_size;
+        void* left_element = left_buffer + left_index * element_size;
+        void* right_element = right_buffer + right_index * element_size;
         
         if (compare(left_element, right_element) <= 0) {
             void* target = NULL;
@@ -367,7 +437,7 @@ static error_code_t merge_sort_merge(iterator_t* begin, iterator_t* mid, iterato
     
     /* 复制剩余元素 */
     while (left_index < left_size) {
-        void* left_element = (char*)left_buffer->data + left_index * element_size;
+        void* left_element = left_buffer + left_index * element_size;
         void* target = NULL;
         iterator_get(iter, &target);
         memcpy(target, left_element, element_size);
@@ -376,7 +446,7 @@ static error_code_t merge_sort_merge(iterator_t* begin, iterator_t* mid, iterato
     }
     
     while (right_index < right_size) {
-        void* right_element = (char*)right_buffer->data + right_index * element_size;
+        void* right_element = right_buffer + right_index * element_size;
         void* target = NULL;
         iterator_get(iter, &target);
         memcpy(target, right_element, element_size);
@@ -385,23 +455,23 @@ static error_code_t merge_sort_merge(iterator_t* begin, iterator_t* mid, iterato
     }
     
     iterator_destroy(iter);
-    temp_buffer_destroy(left_buffer);
-    temp_buffer_destroy(right_buffer);
     
     return CSTL_OK;
 }
 
 /**
- * @brief 归并排序实现
+ * @brief 归并排序实现（优化版）
  * 
  * @param begin 起始迭代器
  * @param end 结束迭代器
  * @param compare 比较函数指针
  * @param element_size 元素大小
+ * @param merge_buffer 预分配的合并缓冲区
  * @return error_code_t 错误码
  */
 static error_code_t merge_sort_impl(iterator_t* begin, iterator_t* end, 
-                                   compare_fn_t compare, size_t element_size)
+                                   compare_fn_t compare, size_t element_size,
+                                   void* merge_buffer)
 {
     if (begin == NULL || end == NULL || compare == NULL) {
         return CSTL_ERROR_NULL_POINTER;
@@ -439,11 +509,11 @@ static error_code_t merge_sort_impl(iterator_t* begin, iterator_t* end,
     iterator_t* right_begin = iterator_clone(mid);
     iterator_t* right_end = iterator_clone(end);
     
-    merge_sort_impl(left_begin, left_end, compare, element_size);
-    merge_sort_impl(right_begin, right_end, compare, element_size);
+    merge_sort_impl(left_begin, left_end, compare, element_size, merge_buffer);
+    merge_sort_impl(right_begin, right_end, compare, element_size, merge_buffer);
     
     /* 合并已排序的部分 */
-    merge_sort_merge(begin, mid, end, compare, element_size);
+    merge_sort_merge(begin, mid, end, compare, element_size, merge_buffer);
     
     iterator_destroy(left_begin);
     iterator_destroy(left_end);
@@ -550,7 +620,7 @@ static error_code_t heap_sort_impl(iterator_t* begin, iterator_t* end,
 }
 
 /**
- * @brief 插入排序实现
+ * @brief 插入排序实现（优化版）
  * 
  * @param begin 起始迭代器
  * @param end 结束迭代器
@@ -580,7 +650,7 @@ static error_code_t insert_sort_impl(iterator_t* begin, iterator_t* end,
         return CSTL_OK;
     }
     
-    /* 插入排序 */
+    /* 优化的插入排序实现 */
     iterator_t* i = iterator_clone(begin);
     iterator_next(i);
     
@@ -596,11 +666,10 @@ static error_code_t insert_sort_impl(iterator_t* begin, iterator_t* end,
         iterator_get(i, &i_element);
         memcpy(key, i_element, element_size);
         
-        /* 找到key应该插入的位置 */
+        /* 找到key应该插入的位置，同时移动元素 */
         iterator_t* j = iterator_clone(i);
         iterator_prev(j);
         
-        /* 向前移动比key大的元素 */
         while (iterator_valid(j) && !iterator_equal(j, begin)) {
             void* j_element = NULL;
             iterator_get(j, &j_element);
@@ -609,11 +678,9 @@ static error_code_t insert_sort_impl(iterator_t* begin, iterator_t* end,
                 /* 将j元素移动到j+1位置 */
                 iterator_t* j_next = iterator_clone(j);
                 iterator_next(j_next);
-                if (iterator_valid(j_next)) {
-                    void* j_next_element = NULL;
-                    iterator_get(j_next, &j_next_element);
-                    memcpy(j_next_element, j_element, element_size);
-                }
+                void* j_next_element = NULL;
+                iterator_get(j_next, &j_next_element);
+                memcpy(j_next_element, j_element, element_size);
                 iterator_destroy(j_next);
                 
                 iterator_prev(j);
@@ -622,22 +689,12 @@ static error_code_t insert_sort_impl(iterator_t* begin, iterator_t* end,
             }
         }
         
-        /* 检查是否需要移动第一个元素 */
-        if (iterator_valid(j) && !iterator_equal(j, begin)) {
+        /* 处理边界情况：检查是否需要移动第一个元素 */
+        if (iterator_valid(j)) {
             void* j_element = NULL;
             iterator_get(j, &j_element);
             
             if (compare(j_element, key) > 0) {
-                /* 将j元素移动到j+1位置 */
-                iterator_t* j_next = iterator_clone(j);
-                iterator_next(j_next);
-                if (iterator_valid(j_next)) {
-                    void* j_next_element = NULL;
-                    iterator_get(j_next, &j_next_element);
-                    memcpy(j_next_element, j_element, element_size);
-                }
-                iterator_destroy(j_next);
-                
                 /* 将key放到第一个位置 */
                 void* first_element = NULL;
                 iterator_get(begin, &first_element);
@@ -654,43 +711,10 @@ static error_code_t insert_sort_impl(iterator_t* begin, iterator_t* end,
                 iterator_destroy(j_next);
             }
         } else {
-            /* j无效或j等于begin，检查第一个元素 */
-            if (iterator_valid(j)) {
-                void* j_element = NULL;
-                iterator_get(j, &j_element);
-                
-                if (compare(j_element, key) > 0) {
-                    /* 将j元素移动到j+1位置 */
-                    iterator_t* j_next = iterator_clone(j);
-                    iterator_next(j_next);
-                    if (iterator_valid(j_next)) {
-                        void* j_next_element = NULL;
-                        iterator_get(j_next, &j_next_element);
-                        memcpy(j_next_element, j_element, element_size);
-                    }
-                    iterator_destroy(j_next);
-                    
-                    /* 将key放到第一个位置 */
-                    void* first_element = NULL;
-                    iterator_get(begin, &first_element);
-                    memcpy(first_element, key, element_size);
-                } else {
-                    /* 将key放到j+1位置 */
-                    iterator_t* j_next = iterator_clone(j);
-                    iterator_next(j_next);
-                    if (iterator_valid(j_next)) {
-                        void* j_next_element = NULL;
-                        iterator_get(j_next, &j_next_element);
-                        memcpy(j_next_element, key, element_size);
-                    }
-                    iterator_destroy(j_next);
-                }
-            } else {
-                /* j无效，将key放到第一个位置 */
-                void* first_element = NULL;
-                iterator_get(begin, &first_element);
-                memcpy(first_element, key, element_size);
-            }
+            /* j无效，将key放到第一个位置 */
+            void* first_element = NULL;
+            iterator_get(begin, &first_element);
+            memcpy(first_element, key, element_size);
         }
         
         iterator_destroy(j);
@@ -724,7 +748,25 @@ error_code_t algo_sort(iterator_t* begin, iterator_t* end, compare_fn_t compare,
         case SORT_QUICK:
             return quick_sort_impl(begin, end, compare, element_size);
         case SORT_MERGE:
-            return merge_sort_impl(begin, end, compare, element_size);
+            {
+                /* 计算范围大小并预分配缓冲区 */
+                size_t size = 0;
+                iterator_t* temp = iterator_clone(begin);
+                while (iterator_valid(temp) && !iterator_equal(temp, end)) {
+                    size++;
+                    iterator_next(temp);
+                }
+                iterator_destroy(temp);
+                
+                void* merge_buffer = malloc(size * element_size);
+                if (merge_buffer == NULL) {
+                    return CSTL_ERROR_OUT_OF_MEMORY;
+                }
+                
+                error_code_t result = merge_sort_impl(begin, end, compare, element_size, merge_buffer);
+                free(merge_buffer);
+                return result;
+            }
         case SORT_HEAP:
             return heap_sort_impl(begin, end, compare, element_size);
         case SORT_INSERT:
@@ -1816,16 +1858,23 @@ void algo_swap(void* a, void* b, size_t size)
         return;
     }
     
-    void* temp = malloc(size);
-    if (temp == NULL) {
-        return;
+    /* 对于小尺寸元素，使用栈分配的临时缓冲区 */
+    if (size <= 128) {
+        char temp[128];
+        memcpy(temp, a, size);
+        memcpy(a, b, size);
+        memcpy(b, temp, size);
+    } else {
+        /* 对于大尺寸元素，仍然使用动态内存分配 */
+        void* temp = malloc(size);
+        if (temp == NULL) {
+            return;
+        }
+        memcpy(temp, a, size);
+        memcpy(a, b, size);
+        memcpy(b, temp, size);
+        free(temp);
     }
-    
-    memcpy(temp, a, size);
-    memcpy(a, b, size);
-    memcpy(b, temp, size);
-    
-    free(temp);
 }
 
 /**

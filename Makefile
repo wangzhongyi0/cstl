@@ -46,6 +46,7 @@ OBJS = $(COMMON_OBJ) $(ITERATOR_OBJ) $(VECTOR_OBJ) $(LIST_OBJ) $(STACK_OBJ) $(QU
 VECTOR_TEST_EXE = $(EXAMPLE_DIR)/vector_test
 THREAD_SAFE_TEST_EXE = $(EXAMPLE_DIR)/thread_safe_test
 POOL_PERFORMANCE_TEST_EXE = $(EXAMPLE_DIR)/pool_performance_test
+SORTING_PERFORMANCE_TEST_EXE = $(EXAMPLE_DIR)/sorting_performance_test
 
 # 默认目标
 all: dirs static_lib examples
@@ -75,7 +76,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 # 示例程序
-examples: $(VECTOR_TEST_EXE) $(THREAD_SAFE_TEST_EXE) $(POOL_PERFORMANCE_TEST_EXE)
+examples: $(VECTOR_TEST_EXE) $(THREAD_SAFE_TEST_EXE) $(POOL_PERFORMANCE_TEST_EXE) $(SORTING_PERFORMANCE_TEST_EXE)
 
 $(VECTOR_TEST_EXE): $(EXAMPLE_DIR)/vector_test.c $(STATIC_LIB)
 	@echo "正在编译 $@..."
@@ -88,6 +89,10 @@ $(THREAD_SAFE_TEST_EXE): $(EXAMPLE_DIR)/thread_safe_test.c $(STATIC_LIB)
 $(POOL_PERFORMANCE_TEST_EXE): $(EXAMPLE_DIR)/pool_performance_test.c $(STATIC_LIB)
 	@echo "正在编译 $@..."
 	@$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -lcstl
+
+$(SORTING_PERFORMANCE_TEST_EXE): $(EXAMPLE_DIR)/sorting_performance_test.c $(STATIC_LIB)
+	@echo "正在编译 $@..."
+	@$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -lcstl -lrt
 
 # 安装
 install: $(STATIC_LIB)
@@ -116,6 +121,8 @@ clean:
 	@rm -f $(VECTOR_TEST_EXE)
 	@rm -f $(THREAD_SAFE_TEST_EXE)
 	@rm -f $(POOL_PERFORMANCE_TEST_EXE)
+	@rm -f $(SORTING_PERFORMANCE_TEST_EXE)
+	@rm -f sorting_performance.log
 	@echo "清理完成"
 
 # 测试
@@ -131,7 +138,11 @@ test_pool_performance: $(POOL_PERFORMANCE_TEST_EXE)
 	@echo "正在运行内存池和对象池性能测试..."
 	@$(POOL_PERFORMANCE_TEST_EXE)
 
-test_all: test test_thread_safe test_pool_performance
+test_sorting_performance: $(SORTING_PERFORMANCE_TEST_EXE)
+	@echo "正在运行排序算法性能测试..."
+	@$(SORTING_PERFORMANCE_TEST_EXE) -r
+
+test_all: test test_thread_safe test_pool_performance test_sorting_performance
 
 # 调试版本
 debug: CFLAGS += -g -DDEBUG -O0
@@ -156,10 +167,11 @@ help:
 	@echo "  test         - 运行vector测试"
 	@echo "  test_thread_safe - 运行线程安全测试"
 	@echo "  test_pool_performance - 运行内存池和对象池性能测试"
+	@echo "  test_sorting_performance - 运行排序算法性能测试"
 	@echo "  test_all     - 运行所有测试"
 	@echo "  debug        - 构建调试版本"
 	@echo "  release      - 构建发布版本"
 	@echo "  help         - 显示此帮助信息"
 
 .PHONY: all dirs static_lib dynamic_lib examples install uninstall clean \
-        test test_thread_safe test_pool_performance test_all debug release help
+        test test_thread_safe test_pool_performance test_sorting_performance test_all debug release help

@@ -48,9 +48,10 @@ int main(){
 
     create_audio_queue();
 
+    sort_audio_data();
+
     end_time = get_current_time_ms_high_precision();
 
-    sort_audio_data();
 
     printf("队列实验结束，总耗时：%dms\n", end_time - start_time);
 

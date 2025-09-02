@@ -36,11 +36,21 @@ int64_t random_int64(int64_t min, int64_t max) {
 }
 
 
-// 获取当前时间（毫秒）
+// 获取当前时间（毫秒）- 跨平台版本
 long long get_current_time_ms_high_precision() {
+#ifdef _WIN32
+    // Windows 平台使用高精度计数器
+    LARGE_INTEGER frequency;
+    LARGE_INTEGER counter;
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&counter);
+    return (long long)(counter.QuadPart * 1000.0 / frequency.QuadPart);
+#else
+    // Unix/Linux 平台使用 clock_gettime
     struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
+    clock_gettime(CLOCK_MONOTONIC, &ts);
     return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+#endif
 }
 
 

@@ -35,6 +35,9 @@ target_link_libraries(pool_performance_test cstl)
 add_executable(queue_test cstl/examples/queue_test.c)
 target_link_libraries(queue_test cstl)
 
+add_executable(sorting_performance_test cstl/examples/sorting_performance_test.c)
+target_link_libraries(sorting_performance_test cstl)
+
 
 # 在非Windows系统上链接pthread库
 if(UNIX)
@@ -42,6 +45,7 @@ if(UNIX)
     target_link_libraries(thread_safe_test pthread)
     target_link_libraries(pool_performance_test pthread)
     target_link_libraries(queue_test pthread)
+    target_link_libraries(sorting_performance_test pthread)
 endif()
 
 # 设置输出目录
@@ -50,7 +54,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/cstl/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/cstl/bin)
 
 # 安装规则
-install(TARGETS cstl vector_test thread_safe_test pool_performance_test queue_test
+install(TARGETS cstl vector_test thread_safe_test pool_performance_test queue_test sorting_performance_test
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib)

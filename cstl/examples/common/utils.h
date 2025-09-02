@@ -14,6 +14,9 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>      // 用于 time()
+#ifdef _WIN32
+#include <windows.h>   // 用于 Windows 高精度计时
+#endif
 
 
 int64_t random_int64(int64_t min, int64_t max);
