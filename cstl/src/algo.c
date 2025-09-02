@@ -525,51 +525,7 @@ static error_code_t merge_sort_impl(iterator_t* begin, iterator_t* end,
 }
 
 /**
- * @brief 堆排序下沉函数
- * 
- * @param begin 起始迭代器
- * @param heap_size 堆大小
- * @param root_index 根索引
- * @param compare 比较函数指针
- * @param element_size 元素大小
- */
-static void heap_sort_sift_down(iterator_t* begin, size_t heap_size, size_t root_index, 
-                                compare_fn_t compare, size_t element_size)
-{
-    size_t largest = root_index;
-    size_t left = 2 * root_index + 1;
-    size_t right = 2 * root_index + 2;
-    
-    if (left < heap_size) {
-        void* left_element = get_element_at_index(begin, left);
-        void* largest_element = get_element_at_index(begin, largest);
-        
-        if (compare(left_element, largest_element) > 0) {
-            largest = left;
-        }
-    }
-    
-    if (right < heap_size) {
-        void* right_element = get_element_at_index(begin, right);
-        void* largest_element = get_element_at_index(begin, largest);
-        
-        if (compare(right_element, largest_element) > 0) {
-            largest = right;
-        }
-    }
-    
-    if (largest != root_index) {
-        void* root_element = get_element_at_index(begin, root_index);
-        void* largest_element = get_element_at_index(begin, largest);
-        
-        algo_swap(root_element, largest_element, element_size);
-        
-        heap_sort_sift_down(begin, heap_size, largest, compare, element_size);
-    }
-}
-
-/**
- * @brief 堆排序实现
+ * @brief 堆排序实现（极度优化版）
  * 
  * @param begin 起始迭代器
  * @param end 结束迭代器
@@ -599,25 +555,100 @@ static error_code_t heap_sort_impl(iterator_t* begin, iterator_t* end,
         return CSTL_OK;
     }
     
+    /* 创建数组缓存所有元素的指针，避免重复迭代 */
+    void** element_ptrs = malloc(size * sizeof(void*));
+    if (element_ptrs == NULL) {
+        return CSTL_ERROR_OUT_OF_MEMORY;
+    }
+    
+    /* 缓存所有元素指针 */
+    iterator_t* iter = iterator_clone(begin);
+    for (size_t i = 0; i < size && iterator_valid(iter); i++) {
+        iterator_get(iter, &element_ptrs[i]);
+        iterator_next(iter);
+    }
+    iterator_destroy(iter);
+    
+    /* 堆排序核心算法 */
     /* 构建最大堆 */
     for (int i = (int)size / 2 - 1; i >= 0; i--) {
-        heap_sort_sift_down(begin, size, (size_t)i, compare, element_size);
+        size_t parent = i;
+        size_t child;
+        
+        while (1) {
+            child = 2 * parent + 1;
+            if (child >= size) break;
+            
+            if (child + 1 < size && compare(element_ptrs[child + 1], element_ptrs[child]) > 0) {
+                child++;
+            }
+            
+            if (compare(element_ptrs[child], element_ptrs[parent]) > 0) {
+                /* 交换元素值而不是指针 */
+                void* temp = malloc(element_size);
+                if (temp == NULL) {
+                    free(element_ptrs);
+                    return CSTL_ERROR_OUT_OF_MEMORY;
+                }
+                memcpy(temp, element_ptrs[parent], element_size);
+                memcpy(element_ptrs[parent], element_ptrs[child], element_size);
+                memcpy(element_ptrs[child], temp, element_size);
+                free(temp);
+                
+                parent = child;
+            } else {
+                break;
+            }
+        }
     }
     
     /* 逐个提取元素 */
     for (size_t i = size - 1; i > 0; i--) {
-        /* 交换根元素和最后一个元素 */
-        void* root_element = get_element_at_index(begin, 0);
-        void* last_element = get_element_at_index(begin, i);
-        
-        algo_swap(root_element, last_element, element_size);
+        /* 交换第一个和最后一个元素 */
+        void* temp = malloc(element_size);
+        if (temp == NULL) {
+            free(element_ptrs);
+            return CSTL_ERROR_OUT_OF_MEMORY;
+        }
+        memcpy(temp, element_ptrs[0], element_size);
+        memcpy(element_ptrs[0], element_ptrs[i], element_size);
+        memcpy(element_ptrs[i], temp, element_size);
+        free(temp);
         
         /* 重新构建堆 */
-        heap_sort_sift_down(begin, i, 0, compare, element_size);
+        size_t parent = 0;
+        size_t child;
+        
+        while (1) {
+            child = 2 * parent + 1;
+            if (child >= i) break;
+            
+            if (child + 1 < i && compare(element_ptrs[child + 1], element_ptrs[child]) > 0) {
+                child++;
+            }
+            
+            if (compare(element_ptrs[child], element_ptrs[parent]) > 0) {
+                void* temp = malloc(element_size);
+                if (temp == NULL) {
+                    free(element_ptrs);
+                    return CSTL_ERROR_OUT_OF_MEMORY;
+                }
+                memcpy(temp, element_ptrs[parent], element_size);
+                memcpy(element_ptrs[parent], element_ptrs[child], element_size);
+                memcpy(element_ptrs[child], temp, element_size);
+                free(temp);
+                
+                parent = child;
+            } else {
+                break;
+            }
+        }
     }
     
+    free(element_ptrs);
     return CSTL_OK;
 }
+
 
 /**
  * @brief 插入排序实现（优化版）

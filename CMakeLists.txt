@@ -22,6 +22,11 @@ set(SOURCES
 # 创建静态库
 add_library(cstl STATIC ${SOURCES})
 
+# 在非Windows系统上链接pthread库
+if(UNIX)
+    target_link_libraries(cstl pthread)
+endif()
+
 # 测试案例
 add_executable(vector_test cstl/examples/vector_test.c)
 target_link_libraries(vector_test cstl)
